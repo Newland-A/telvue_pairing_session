@@ -10,41 +10,84 @@
 # 3 BOnus HOPEFULLY get there
 
 class TimeConverter
-	attr_reader :output
+  attr_reader :results, :errors
 
-	def initialize(duration, format = "HH:MM:SS")
-		@input = { duration: duration, format: format}
-		@output = { time: nil, errors: ""}
+  def initialize(args = {})
+    @duration = args.fetch(:duration, nil)
+    @format = args.fetch(:format, 'HH:MM:SS')
+    @errors = []
+    @results = {}
 
-		validate_input
-		transform_duration if @output[:errors].to_s.empty?
-	end
+    validate_input
+    transform_duration unless @errors.any?
+  end
 
-	private
+  def errors
+    @errors
+  end
 
-	def validate_input
-		@output[:errors] = "Duration is required" if @input[:duration].nil? || @input[:duration].to_s.empty?
-		@output[:errors] = "Duration should only contain numbers" if !@input[:duration].is_a?(Numeric)
-		@output[:errors] = "Duration should be an integer" if !@input[:duration].is_a?(Integer)
-		@output[:errors] = "Duration should not be negative" if @input[:duration].to_i.negative?
+  def results
+    @results
+  end
 
-		@output[:errors] unless @output[:errors].empty?
-	end
+  private
 
-	def transform_duration
-		duration = @input[:duration]
+  def validate_input
+    validate_duration_present
+    validate_duration_number
+    validate_duration_integer
+    validate_duration_not_negative
+    stop_on_first_error
+  end
 
-		@input[:format]	== "HH:MM" ? @output[:time] = Time.at(duration).utc.strftime("%H:%M") : @output[:time] = Time.at(duration).utc.strftime("%H:%M:%S")
-	end
+  def validate_duration_present
+    if @duration.nil?
+      @errors << "Duration is required"
+    end
+  end
+
+  def validate_duration_number
+    unless @duration.is_a?(Numeric) && !@duration.is_a?(String)
+      @errors << "Duration should be a number"
+    end
+  end
+
+  def validate_duration_integer
+    unless @duration.is_a?(Integer)
+      @errors << "Duration should be an integer"
+    end
+  end
+
+  def validate_duration_not_negative
+    if if @duration.respond_to?(:negative?) && @duration.negative?
+      @errors << "Duration should not be negative"
+		end
+  end
+
+  def stop_on_first_error
+   	return @errors.first.to_s if @errors.any?
+  end
+
+  def transform_duration
+    return unless @errors.empty?
+
+    hours = @duration / 3600
+    minutes = (@duration % 3600) / 60
+    seconds = @duration % 60
+
+    case @format
+			when 'HH:MM'
+				@results[:time] = format('%02d:%02d', hours, minutes)
+			else
+				@results[:time] = format('%02d:%02d:%02d', hours, minutes, seconds)
+			end
+		end
+  end
 end
 
-# formatter = TimeConverter.new(3600, "HH:MM") # => {"1:00"=>nil}
-# formatter = TimeConverter.new(3600, "HH:MM:SS") # => {"1:00"=>nil}
-# formatter = TimeConverter.new(3600, "invalid") # => {"1:00"=>nil}
-formatter = TimeConverter.new("abc", "HH:MM")  # => {"abc:HH:MM"=>"Duration should be an integer"}
-
-if !formatter.output[:errors].empty?
-	puts "Error: #{formatter.output[:errors]}"
-else
-	puts "Duration: #{formatter.output[:time]}"
-end
+# formatter = TimeConverter.new({duration: 3601, format: 'HH:MM:SS'}) # => {"1:00"=>nil}
+# formatter = TimeConverter.new({duration: 3600, format: "HH:MM"}) # => {"1:00"=>nil}
+formatter = TimeConverter.new({ duration: 3600, format: "invalid" }) # => {"1:00"=>nil}
+# formatter = TimeConverter.new("abc", "HH:MM")  # => {"abc:HH:MM"=>"Duration should be an integer"}
+puts formatter.errors
+puts formatter.results[:time]
